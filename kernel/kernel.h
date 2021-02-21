@@ -1,70 +1,113 @@
+#ifndef __KERNEL_H__
+#define __KERNEL_H__
+
 #include "sphere.h"
 #include "camera.h"
 #include "point_light.h"
 #include "world.h"
 #include "phong.h"
+#include "plane.h"
+
+// limited version of checkCudaErrors from helper_cuda.h in CUDA examples
+#define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
+
+/* Check the error of cuda API */
+void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
+    if (result) {
+        std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " <<
+            file << ":" << line << " '" << func << "' \n";
+        // Make sure we call CUDA Device Reset before exiting
+        cudaDeviceReset();
+        exit(99);
+    }
+}
+
+
+template<class T>
+__device__
+T min(T v1, T v2){
+    if(v1 < v2) return v1;
+    return v2;
+}
 
 /* Add Spheres */
 __global__ 
-void addSphere(Object **objs){
+void addSphere(Object **objs, int obj_idx, Shader **shaders, int shd_idx, vec3 pos, double radius){
     if (threadIdx.x == 0 && blockIdx.x == 0) {
-        *(objs) = new Sphere(vec3(1, 0, 0), 0.5, vec3(1, 0, 0));
-        *(objs + 1) = new Sphere(vec3(0.0, 0.0, 1.0), 0.5, vec3(0.2, 0.2, 0.8));
+        *(objs + obj_idx) = new Sphere(pos, radius, shaders, shd_idx);
+    }
+}
+
+/* Add Plane */
+__global__ 
+void addPlane(Object **objs, int obj_idx, Shader **shaders, int shd_idx, vec3 x1, vec3 norm){
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        *(objs + obj_idx) = new Plane(x1, norm, shaders, shd_idx);
     }
 }
 
 /* Create Camera in GPU */
 __global__ 
-void creatCamera(Camera **camera, vec3 pos, vec3 look, vec3 up, int width, int height){
+void creatCamera(Camera **camera, vec3 pos, vec3 look, vec3 up, int width, int height, double phi){
     if (threadIdx.x == 0 && blockIdx.x == 0) {
         camera[0] = new Camera();
         const double pi = 4 * std::atan(1.0);
         camera[0]->Position_And_Aim_Camera(pos, look, up);
-        camera[0]->Focus_Camera(1.0, (double)width / height, 70.0 * (pi / 180));
+        camera[0]->Focus_Camera(1.0, (double)width / height, phi * (pi / 180));
         camera[0]->Set_Resolution(width, height);
     }
 }
 
 /* Create light sources */
 __global__
-void createLight(Light **lights, int idx, vec3 pos, vec3 color, double brightness, vec3 *testVec){
+void createLight(Light **lights, int idx, vec3 pos, vec3 color, double brightness){
     if (threadIdx.x == 0 && blockIdx.x == 0) {
         *(lights + idx) = new Point_Light(pos, color, brightness);
-        *testVec  = color;
     }
 }
 
 /* Create World in GPU */
 __global__ 
 void createWorld(World **world, Camera **camera, Object **objs, int N_objs, Light **lights, int N_lights,
-                 vec3 back, vec3 ambient, int intense, vec3 *testVec){
+                vec3 ambient, int intense){
     if (threadIdx.x == 0 && blockIdx.x == 0) {
-        *(world) = new World(camera, objs, N_objs, lights, N_lights, back, ambient, 1);
-        *testVec  = world[0]->object_list[0]->color;
+        *(world) = new World(camera, objs, N_objs, lights, N_lights, ambient, 1);
     }
 }
 
+/* Create Shader in GPU */
 __global__
-void createShader(Shader **shader, vec3 ambient, vec3 diff, vec3 specular, double power, vec3 *testVec){
+void createShader(Shader **shader, int idx, vec3 ambient, vec3 diff, vec3 specular, double power){
     if (threadIdx.x == 0 && blockIdx.x == 0) {
-        *(shader) = new Phong_Shader(ambient, diff, specular, power);
-        // *testVec  = shader[0]->ttt;
+        *(shader + idx) = new Phong_Shader(ambient, diff, specular, power);
     }
 }
-
 
 /* Convert color vector from double to int */
 __device__ 
 void vecToColor(ivec3 *color, int idx , vec3 &dcolor){
-    color[idx][0] = 255 * dcolor[0];
-    color[idx][1] = 255 * dcolor[1];
-    color[idx][2] = 255 * dcolor[2];
-    return;
+    color[idx][0] = int(255* min(1.0,dcolor[0]));
+    color[idx][1] = int(255* min(1.0,dcolor[1]));
+    color[idx][2] = int(255* min(1.0,dcolor[2]));
 }
+
+
+
+// __global__
+// void freeWorld(Shader **shaders, int N_shader, Object **objects, int N_objs, Light  **ligths , int N_lights,
+//                World  **world)
+// {
+//     if (threadIdx.x == 0 && blockIdx.x == 0) {
+//     for(int i=0;i< N_shader; i++ ) delete *(shaders + i);
+//     for(int i=0;i< N_objs; i++ ) delete *(objects + i);
+//     for(int i=0;i< N_lights; i++ ) delete *(ligths + i);
+//     delete *(world);
+//     }
+// }
 
 /* Render */
 __global__ 
-void render(Shader **shader, World **world,  ivec3 *colors, int width, int height, vec3 *testVec){
+void render(World **world,  ivec3 *colors, int width, int height){
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
     if(i>= width || j >= height) return;
@@ -79,17 +122,12 @@ void render(Shader **shader, World **world,  ivec3 *colors, int width, int heigh
 
     /* Cast Ray and Set color */
     (*world)->Closest_Intersection(ray, result);
-    if(result.dist < __DBL_MAX__){ // hit something
+    if(result.dist < __DBL_MAX__ ){ // hit something
         vec3 point = ray.point(result.dist);
-        dcolor = (*shader)->Shade_Surface(ray, point, result.object->Norm(point), world );
-        if(i == 320 && j == 240) (*testVec) = dcolor;
-    }
-    else{
-        // vec3 unit_direct = ray.direction;
-        // double t = 0.5f * (unit_direct[1] + 1.0f);
-        // dcolor = (1.0f-t)*vec3(1.0, 1.0, 1.0) + t*vec3(0.5, 0.7, 1.0);
-        
+        dcolor = result.object->shader->Shade_Surface(ray, point, result.object->Norm(point), world );
     }
     vecToColor(colors, color_index, dcolor);
     return;
 }
+
+#endif

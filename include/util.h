@@ -6,6 +6,7 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <stdio.h>
 
 /**
  * Save image to file.

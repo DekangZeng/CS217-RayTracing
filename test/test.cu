@@ -4,19 +4,6 @@
 #include "util.h"
 #include "shader.h"
 
-// limited version of checkCudaErrors from helper_cuda.h in CUDA examples
-#define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
-
-/* Check the error of cuda API */
-void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
-    if (result) {
-        std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " <<
-            file << ":" << line << " '" << func << "' \n";
-        // Make sure we call CUDA Device Reset before exiting
-        cudaDeviceReset();
-        exit(99);
-    }
-}
 
 
 int main(int argc, char *argv[]) {
@@ -26,8 +13,8 @@ int main(int argc, char *argv[]) {
     checkCudaErrors(cudaMallocManaged((void **)&testVec, sizeof(vec3)));
     checkCudaErrors(cudaDeviceSynchronize());
 
-    int width   = 640;
-    int height  = 480;
+    int width   = 1920;
+    int height  = 1080;
     /* Camera parameter   */
     vec3 pos    = vec3(0.0, 1.0, 6.0);
     vec3 look   = vec3(0.0, 0.0, 0.0);
@@ -49,7 +36,7 @@ int main(int argc, char *argv[]) {
     printf("Test Vec3 : %f, %f, %f\n", (*testVec)[0], (*testVec)[1], (*testVec)[2]);
 
     /* Initialize objects */
-    int N_objs = 2; // number of objects
+    int N_objs = 3; // number of objects
     Object **objs;
     checkCudaErrors(cudaMalloc((void **)&objs, sizeof(Object *) * N_objs));
     addSphere<<<1,1>>>(objs); // TODO: make it flexibale
@@ -58,7 +45,7 @@ int main(int argc, char *argv[]) {
     /* Initialize world */
     World **world;
     checkCudaErrors(cudaMalloc((void **)&world, sizeof(World *)));
-    createWorld<<<1,1>>>(world, camera, objs,N_objs, lights, N_light, vec3(0,0,0), vec3(1,1,1),1, testVec );
+    createWorld<<<1,1>>>(world, camera, objs,N_objs, lights, N_light, vec3(0,0,0), 0, testVec );
     printf("Test Vec3 : %f, %f, %f\n", (*testVec)[0], (*testVec)[1], (*testVec)[2]);
 
 
