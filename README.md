@@ -1,36 +1,28 @@
 # CS217-RayTracing
-Project for CS217 GPU architecture. A basic cuda version raytracing program
+
+Project for CS217 GPU architecture. This branch is GPU Version.
+
+We implemented a basic ray tracing program, which include basic objects and light sources. It also support phong shader. Running much faster than the CPU Version.
 
 ## How to run
-Please make sure [CMake](https://cmake.org/) is installed on your machine. 
 
 Enter the root of this project, using following commands to compile:
 ```bash
 make clean
-make build
+make
 ```
 
-After compile, you will have two executable in **buil** fold. Using this command to 
-run the test program:
+After compile, you will have three executables **scene1**, **scene2** and **scene3**. 
+
+Using this command to run the programs:
 ```bash
-./build/TestRT
+./scene1
+./scene2
+./scene3
 ```
 
-This program will add new file named "test.jpg" in **result** fold. There will be 
-a blue sphere on the green background.
+Then you can see the result images in result fold.
 
-
-## 11.13.2020
-Set up framework
-
-## 11.14.2020
-Update camera.h and ray.h
-
-## 11.15.2020
-Finished basic ray tracing program. See usage 
-
-## 12.15 2020
-Finished CPU_Version with Phong_Shader
 
 ## Reference 
 https://in1weekend.blogspot.com/2016/01/ray-tracing-in-one-weekend.html
